@@ -1,0 +1,4 @@
+# GitHub Packages 認証情報 (このファイルを gradle.properties にコピーして設定してください)
+# https://github.com/settings/tokens で read:packages スコープのトークンを発行
+gpr.user=YOUR_GITHUB_USERNAME
+gpr.key=YOUR_GITHUB_TOKEN

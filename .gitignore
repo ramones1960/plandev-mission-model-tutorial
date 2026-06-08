@@ -1,0 +1,20 @@
+# Gradle
+.gradle/
+build/
+out/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+
+# Eclipse
+.classpath
+.project
+.settings/
+
+# GitHub Packages 認証情報（絶対にコミットしない）
+gradle.properties
+
+# OS
+.DS_Store
+Thumbs.db

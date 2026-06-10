@@ -1,60 +1,101 @@
 package gov.nasa.jpl.aerie.tutorial.activities;
 
 import gov.nasa.jpl.aerie.merlin.framework.annotations.ActivityType;
+import gov.nasa.jpl.aerie.merlin.framework.annotations.ActivityType.EffectModel;
+import gov.nasa.jpl.aerie.merlin.framework.annotations.Export;
 import gov.nasa.jpl.aerie.merlin.framework.annotations.Export.Parameter;
 import gov.nasa.jpl.aerie.merlin.protocol.types.Duration;
 import gov.nasa.jpl.aerie.tutorial.Mission;
+import gov.nasa.jpl.aerie.tutorial.models.PointingMode;
 import gov.nasa.jpl.aerie.tutorial.models.SatelliteMode;
 
 import static gov.nasa.jpl.aerie.merlin.framework.ModelActions.delay;
+import static gov.nasa.jpl.aerie.merlin.framework.ModelActions.waitUntil;
 
 /**
  * 地上局ダウンリンクアクティビティ。
  *
- * <p>地上局との可視時間内に SSR のデータを送信する。
- * RF 送信機の電力を消費しながら、SSR データ量を減少させる。
- * 実際の運用では地上局可視ウィンドウの制約と組み合わせる。
+ * <p>地上局可視ウィンドウ内に SSR のデータを送信する。
+ * デフォルトでは {@code /ground/station_visible} が true になるまで待機してから
+ * 送信を開始する（{@code waitUntil} による条件待ちの実例）。
  *
- * <h3>リソースへの影響</h3>
+ * <p>送信時間は「最大送信時間」と「SSR を空にするのに必要な時間」の短い方で打ち切られ、
+ * SSR が負の値になることはない。
+ *
+ * <h2>リソースへの影響</h2>
  * <ul>
- *   <li>{@code power/battery_energy_wh} — RF 送信機分だけ放電が加速</li>
- *   <li>{@code power/total_draw_w}       — 送信機消費電力の加算</li>
- *   <li>{@code data/stored_volume_gb}    — ダウンリンクレートで減少</li>
- *   <li>{@code satellite/mode}           — DOWNLINK → NOMINAL に遷移</li>
+ *   <li>{@code /power/load_w}       — RF 送信機の電力を消費</li>
+ *   <li>{@code /data/ssr_volume_gb}  — ダウンリンクレートで減少</li>
+ *   <li>{@code /satellite/mode}      — DOWNLINK → NOMINAL に遷移</li>
+ *   <li>{@code /satellite/pointing}  — GROUND_STATION_TRACKING に遷移</li>
  * </ul>
  */
 @ActivityType("Downlink")
 public final class Downlink {
 
-    /** 地上局との接触継続時間（可視ウィンドウに制約される）。 */
+    /** 最大送信時間。可視ウィンドウの長さに合わせて設定する。 */
     @Parameter
-    public Duration duration = Duration.of(10, Duration.MINUTES);
+    public Duration maxTransmitDuration = Duration.of(8, Duration.MINUTES);
 
     /** RF 送信機の追加消費電力 [W]。 */
     @Parameter
-    public double transmitterPowerDrawW = 30.0;
+    public double transmitterPowerW = 60.0;
 
-    /** ダウンリンクデータレート [GB/s]（X バンドの典型値）。 */
+    /** ダウンリンクレート [GB/s]（0.0125 GB/s = 100 Mbps）。 */
     @Parameter
-    public double downlinkRateGbPerSec = 0.05; // 約 180 GB/時間
+    public double downlinkRateGbPerSec = 0.0125;
 
-    /** 使用する地上局の識別子。 */
+    /** true なら地上局可視ウィンドウの開始まで待機してから送信する。 */
     @Parameter
-    public String groundStationId = "GS_USSC";
+    public boolean waitForStationVisibility = true;
 
+    /** 使用する地上局の識別子（プランニングビューでの区別用）。 */
+    @Parameter
+    public String groundStationId = "GS-1";
+
+    public Downlink() {}
+
+    public Downlink(final Duration maxTransmitDuration) {
+        this.maxTransmitDuration = maxTransmitDuration;
+    }
+
+    @Export.Validation("max transmit duration must be positive")
+    public boolean validateDuration() {
+        return this.maxTransmitDuration.longerThan(Duration.ZERO);
+    }
+
+    @Export.Validation("transmitter power and downlink rate must be positive")
+    public boolean validateRates() {
+        return this.transmitterPowerW >= 0.0 && this.downlinkRateGbPerSec > 0.0;
+    }
+
+    @EffectModel
     public void run(final Mission mission) {
-        mission.mode.setMode(SatelliteMode.DOWNLINK);
+        // セーフモード中はダウンリンクコマンドを拒否する
+        if (mission.mode.isSafe()) return;
 
-        // 送信機起動: 電力消費増・データ量減
-        mission.power.emitPowerDelta(+transmitterPowerDrawW);
-        mission.data.emitDataRateDelta(-downlinkRateGbPerSec);
+        if (this.waitForStationVisibility) {
+            waitUntil(mission.orbit.stationVisible.is(true));
+        }
 
-        delay(duration);
+        mission.mode.set(SatelliteMode.DOWNLINK);
+        mission.mode.setPointing(PointingMode.GROUND_STATION_TRACKING);
 
-        // 送信機停止: エフェクトを打ち消す
-        mission.power.emitPowerDelta(-transmitterPowerDrawW);
-        mission.data.emitDataRateDelta(+downlinkRateGbPerSec);
+        // SSR を空にするのに必要な時間と最大送信時間の短い方だけ送信する
+        final double storedGb = mission.data.getVolumeGb();
+        final double maxSeconds = this.maxTransmitDuration.ratioOver(Duration.SECONDS);
+        final double transmitSeconds = Math.min(maxSeconds, storedGb / this.downlinkRateGbPerSec);
 
-        mission.mode.setMode(SatelliteMode.NOMINAL);
+        if (transmitSeconds > 0.0) {
+            mission.power.addLoad(+this.transmitterPowerW);
+            mission.data.addRecordingRate(-this.downlinkRateGbPerSec);
+
+            delay(Duration.roundNearest(transmitSeconds, Duration.SECONDS));
+
+            mission.data.addRecordingRate(+this.downlinkRateGbPerSec);
+            mission.power.addLoad(-this.transmitterPowerW);
+        }
+
+        mission.mode.set(SatelliteMode.NOMINAL);
     }
 }

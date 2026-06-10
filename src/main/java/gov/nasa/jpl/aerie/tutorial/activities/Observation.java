@@ -1,6 +1,8 @@
 package gov.nasa.jpl.aerie.tutorial.activities;
 
 import gov.nasa.jpl.aerie.merlin.framework.annotations.ActivityType;
+import gov.nasa.jpl.aerie.merlin.framework.annotations.ActivityType.EffectModel;
+import gov.nasa.jpl.aerie.merlin.framework.annotations.Export;
 import gov.nasa.jpl.aerie.merlin.framework.annotations.Export.Parameter;
 import gov.nasa.jpl.aerie.merlin.protocol.types.Duration;
 import gov.nasa.jpl.aerie.tutorial.Mission;
@@ -14,12 +16,14 @@ import static gov.nasa.jpl.aerie.merlin.framework.ModelActions.delay;
  * <p>観測機器を起動してサイエンスデータを取得する。
  * 実行中は機器分の追加電力を消費し、生成データが SSR に蓄積される。
  *
- * <h3>リソースへの影響</h3>
+ * <p>セーフモード中に開始された場合、観測は実行されずに即終了する
+ * （実衛星でコマンドがオンボードフォールトプロテクションに拒否される動作の簡易版）。
+ *
+ * <h2>リソースへの影響</h2>
  * <ul>
- *   <li>{@code power/battery_energy_wh} — 機器消費分だけ放電が加速</li>
- *   <li>{@code power/total_draw_w}       — 機器消費電力の加算</li>
- *   <li>{@code data/stored_volume_gb}    — データ生成レートで増加</li>
- *   <li>{@code satellite/mode}           — SCIENCE → NOMINAL に遷移</li>
+ *   <li>{@code /power/load_w}      — 観測機器の電力を消費</li>
+ *   <li>{@code /data/ssr_volume_gb} — データ生成レートで増加</li>
+ *   <li>{@code /satellite/mode}     — SCIENCE → NOMINAL に遷移</li>
  * </ul>
  */
 @ActivityType("Observation")
@@ -27,35 +31,52 @@ public final class Observation {
 
     /** 観測継続時間。 */
     @Parameter
-    public Duration duration = Duration.of(5, Duration.MINUTES);
+    public Duration duration = Duration.of(8, Duration.MINUTES);
 
-    /** ハウスキーピング以外の機器追加消費電力 [W]。 */
+    /** 観測機器の追加消費電力 [W]。 */
     @Parameter
-    public double instrumentPowerDrawW = 25.0;
+    public double instrumentPowerW = 40.0;
 
-    /** サイエンスデータ生成レート [GB/s]。 */
+    /** サイエンスデータ生成レート [GB/s]（0.01 GB/s = 36 GB/h）。 */
     @Parameter
-    public double dataProductionRateGbPerSec = 0.005; // 約 18 GB/時間
+    public double dataRateGbPerSec = 0.01;
 
     /** 観測対象の識別子（プランニングビューでの区別用）。 */
     @Parameter
-    public String targetId = "TARGET_A";
+    public String targetId = "TARGET-001";
 
+    public Observation() {}
+
+    public Observation(final String targetId, final Duration duration) {
+        this.targetId = targetId;
+        this.duration = duration;
+    }
+
+    @Export.Validation("observation duration must be positive")
+    public boolean validateDuration() {
+        return this.duration.longerThan(Duration.ZERO);
+    }
+
+    @Export.Validation("instrument power and data rate must be non-negative")
+    public boolean validateRates() {
+        return this.instrumentPowerW >= 0.0 && this.dataRateGbPerSec >= 0.0;
+    }
+
+    @EffectModel
     public void run(final Mission mission) {
-        // モードを SCIENCE に遷移
-        mission.mode.setMode(SatelliteMode.SCIENCE);
+        // セーフモード中は観測コマンドを拒否する
+        if (mission.mode.isSafe()) return;
 
-        // 追加電力消費とデータ生成を開始（加算エフェクト）
-        mission.power.emitPowerDelta(+instrumentPowerDrawW);
-        mission.data.emitDataRateDelta(+dataProductionRateGbPerSec);
+        mission.mode.set(SatelliteMode.SCIENCE);
 
-        delay(duration);
+        mission.power.addLoad(+this.instrumentPowerW);
+        mission.data.addRecordingRate(+this.dataRateGbPerSec);
 
-        // 加算したエフェクトを逆符号で打ち消す（終了処理）
-        mission.power.emitPowerDelta(-instrumentPowerDrawW);
-        mission.data.emitDataRateDelta(-dataProductionRateGbPerSec);
+        delay(this.duration);
 
-        // 通常モードに復帰
-        mission.mode.setMode(SatelliteMode.NOMINAL);
+        mission.data.addRecordingRate(-this.dataRateGbPerSec);
+        mission.power.addLoad(-this.instrumentPowerW);
+
+        mission.mode.set(SatelliteMode.NOMINAL);
     }
 }

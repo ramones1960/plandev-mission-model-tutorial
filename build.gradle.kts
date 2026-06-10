@@ -31,6 +31,7 @@ val aerieVersion = "2.14.0"
 
 dependencies {
     implementation("gov.nasa.jpl.aerie:merlin-framework:$aerieVersion")
+    implementation("gov.nasa.jpl.aerie:contrib:$aerieVersion")
     annotationProcessor("gov.nasa.jpl.aerie:merlin-framework-processor:$aerieVersion")
 
     testImplementation("gov.nasa.jpl.aerie:merlin-framework-junit:$aerieVersion")

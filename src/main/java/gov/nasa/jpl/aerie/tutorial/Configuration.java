@@ -3,30 +3,22 @@ package gov.nasa.jpl.aerie.tutorial;
 import gov.nasa.jpl.aerie.merlin.framework.annotations.Export;
 import gov.nasa.jpl.aerie.merlin.framework.annotations.Export.Template;
 
+import java.nio.file.Path;
+
 /**
  * シミュレーション開始時に設定できるミッションパラメータ。
  *
  * <p>Aerie UI/API からプランごとにオーバーライドできる。
- * 軌道・地上局・電力・データ・自律運用（FDIR）の5グループに分かれる。
+ *
+ * <p>軌道イベント（地上局可視・食）はモデル内で計算せず、外部の軌道力学系（FDS）が
+ * 解析した成果物ファイルを {@link #orbitEventsFilePath} で取り込む。
+ * ファイル仕様は {@code docs/ICD_FDS_ORBIT_EVENTS.md} を参照。
  */
 public record Configuration(
 
-    // --- 軌道系 ---
-    /** 軌道周期 [min]（LEO 高度約 550 km で約 95 分） */
-    double orbitPeriodMinutes,
-
-    /** 1周回あたりの食（地球の影）の継続時間 [min] */
-    double eclipseDurationMinutes,
-
-    // --- 地上局系 ---
-    /** 地上局可視ウィンドウの発生間隔 [min]（パス開始から次のパス開始まで） */
-    double contactIntervalMinutes,
-
-    /** 1回の可視ウィンドウの継続時間 [min] */
-    double contactDurationMinutes,
-
-    /** シミュレーション開始から最初の可視ウィンドウまでのオフセット [min] */
-    double firstContactOffsetMinutes,
+    // --- FDS インタフェース ---
+    /** FDS 軌道イベントファイル（ICD_FDS_ORBIT_EVENTS 準拠の CSV）のパス */
+    Path orbitEventsFilePath,
 
     // --- 電力系 ---
     /** バッテリー総容量 [Wh] */
@@ -62,11 +54,7 @@ public record Configuration(
     /** Aerie がプラン作成時に使うデフォルト構成。 */
     public static @Template Configuration defaultConfiguration() {
         return new Configuration(
-             95.0,   // 軌道周期 95 分
-             35.0,   // 食 35 分／周回
-            360.0,   // 地上局パスは約 6 時間ごと
-              8.0,   // 可視ウィンドウ 8 分
-            100.0,   // 最初のパスは開始 100 分後
+            Path.of("fds/orbit_events_sample.csv"),  // リポジトリ同梱のサンプル（実運用では FDS 配付物に差し替え）
           4_000.0,   // 4 kWh バッテリー
           3_200.0,   // 初期 SoC 80%
             250.0,   // 250 W 太陽電池
@@ -79,19 +67,9 @@ public record Configuration(
         );
     }
 
-    @Export.Validation("orbit period must be positive")
-    public boolean validateOrbitPeriod() {
-        return orbitPeriodMinutes > 0.0;
-    }
-
-    @Export.Validation("eclipse duration must be non-negative and shorter than the orbit period")
-    public boolean validateEclipseDuration() {
-        return eclipseDurationMinutes >= 0.0 && eclipseDurationMinutes < orbitPeriodMinutes;
-    }
-
-    @Export.Validation("contact duration must be positive and shorter than the contact interval")
-    public boolean validateContactWindow() {
-        return contactDurationMinutes > 0.0 && contactDurationMinutes < contactIntervalMinutes;
+    @Export.Validation("FDS orbit events file must exist (see docs/ICD_FDS_ORBIT_EVENTS.md)")
+    public boolean validateOrbitEventsFile() {
+        return orbitEventsFilePath.toFile().exists();
     }
 
     @Export.Validation("battery capacity must be positive")

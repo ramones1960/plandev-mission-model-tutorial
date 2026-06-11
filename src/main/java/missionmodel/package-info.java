@@ -7,17 +7,15 @@
 @MissionModel(model = Mission.class)
 @WithConfiguration(Configuration.class)
 @WithMappers(BasicValueMappers.class)
-@WithActivityTypes({
-    Observation.class,
-    Downlink.class,
-    SafeModeEntry.class,
-    SolarCharging.class
-})
+@WithActivityType(Observation.class)
+@WithActivityType(Downlink.class)
+@WithActivityType(SafeModeEntry.class)
+@WithActivityType(SolarCharging.class)
 package missionmodel;
 
 import gov.nasa.jpl.aerie.contrib.serialization.rulesets.BasicValueMappers;
 import gov.nasa.jpl.aerie.merlin.framework.annotations.MissionModel;
-import gov.nasa.jpl.aerie.merlin.framework.annotations.MissionModel.WithActivityTypes;
+import gov.nasa.jpl.aerie.merlin.framework.annotations.MissionModel.WithActivityType;
 import gov.nasa.jpl.aerie.merlin.framework.annotations.MissionModel.WithConfiguration;
 import gov.nasa.jpl.aerie.merlin.framework.annotations.MissionModel.WithMappers;
 import missionmodel.activities.Downlink;

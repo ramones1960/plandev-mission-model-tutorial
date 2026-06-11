@@ -70,11 +70,14 @@ cp gradle.properties.template gradle.properties
 GitHub PAT の作成: <https://github.com/settings/tokens>
 必要なスコープ: `read:packages`
 
-### 2. ビルド
+### 2. ビルドとテスト
 
 ```bash
-./gradlew build
+./gradlew build   # コンパイル + シミュレーションテスト実行
 ```
+
+`src/test/java/missionmodel/MissionScenarioTest.java` に、`merlin-framework-junit` の
+`MerlinExtension` を使った観測→ダウンリンク→セーフモードのシナリオテストがあります。
 
 ### 3. PlanDev へのアップロード
 
@@ -132,7 +135,6 @@ PlanDev シミュレーター
 
 ## 今後の拡張ポイント
 
-- **シミュレーションテスト**: `merlin-framework-junit` を使ったアクティビティ単体のリソース収支検証
 - **地上局可視ウィンドウ制約**: `Downlink` に可視時間のスケジュール制約を追加
 - **バッテリー DOD 制約**: 放電深度 (Depth of Discharge) の上限制約
 - **熱モデル**: 機器温度を追加リソースとして追跡

@@ -30,15 +30,20 @@ repositories {
 
 val aerieVersion = "2.14.0"
 
+// JNISpice (contrib の推移的依存) は Maven で再配布されておらず、
+// 本モデルは SPICE 機能を使わないため全 configuration から除外する
+configurations.all {
+    exclude(group = "JNISpice", module = "JNISpice")
+}
+
 dependencies {
     annotationProcessor("gov.nasa.jpl.aerie:merlin-framework-processor:$aerieVersion")
 
     implementation("gov.nasa.jpl.aerie:merlin-framework:$aerieVersion")
     implementation("gov.nasa.jpl.aerie:merlin-sdk:$aerieVersion")
     implementation("gov.nasa.jpl.aerie:merlin-driver:$aerieVersion")
-    implementation("gov.nasa.jpl.aerie:contrib:$aerieVersion")
     implementation("gov.nasa.jpl.aerie:parsing-utilities:$aerieVersion")
-    implementation("gov.nasa.jpl.aerie:type-utils:$aerieVersion")
+    implementation("gov.nasa.jpl.aerie:contrib:$aerieVersion")
 
     testImplementation("gov.nasa.jpl.aerie:merlin-framework-junit:$aerieVersion")
     testImplementation(platform("org.junit:junit-bom:5.10.2"))

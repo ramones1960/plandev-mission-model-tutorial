@@ -17,8 +17,8 @@ java {
 repositories {
     mavenCentral()
     maven {
-        name = "GitHubPackages-AMMOS-Aerie"
-        url  = URI("https://maven.pkg.github.com/NASA-AMMOS/aerie")
+        name = "GitHubPackages-AMMOS-PlanDev"
+        url  = URI("https://maven.pkg.github.com/NASA-AMMOS/plandev")
         credentials {
             username = project.findProperty("gpr.user") as String?
                 ?: System.getenv("GITHUB_ACTOR")
@@ -28,7 +28,7 @@ repositories {
     }
 }
 
-val aerieVersion = "2.14.0"
+val aerieVersion = "4.2.1"
 
 // JNISpice (contrib の推移的依存) は Maven で再配布されておらず、
 // 本モデルは SPICE 機能を使わないため全 configuration から除外する

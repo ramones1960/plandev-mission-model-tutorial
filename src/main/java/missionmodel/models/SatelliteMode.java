@@ -1,9 +1,9 @@
-package gov.nasa.jpl.aerie.tutorial.models;
+package missionmodel.models;
 
 /**
  * 衛星の動作モード。
  *
- * Aerie タイムライン上に離散リソースとして可視化される。
+ * <p>PlanDev タイムライン上に離散リソースとして可視化される。
  */
 public enum SatelliteMode {
     /** 最小電力・保護状態。科学観測・ダウンリンク不可。 */

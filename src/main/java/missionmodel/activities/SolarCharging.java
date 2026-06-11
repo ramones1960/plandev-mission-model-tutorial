@@ -1,10 +1,11 @@
-package gov.nasa.jpl.aerie.tutorial.activities;
+package missionmodel.activities;
 
 import gov.nasa.jpl.aerie.merlin.framework.annotations.ActivityType;
 import gov.nasa.jpl.aerie.merlin.framework.annotations.Export.Parameter;
+import gov.nasa.jpl.aerie.merlin.framework.annotations.Export.Validation;
 import gov.nasa.jpl.aerie.merlin.protocol.types.Duration;
-import gov.nasa.jpl.aerie.tutorial.Mission;
-import gov.nasa.jpl.aerie.tutorial.models.SatelliteMode;
+import missionmodel.Mission;
+import missionmodel.models.SatelliteMode;
 
 import static gov.nasa.jpl.aerie.merlin.framework.ModelActions.delay;
 
@@ -15,11 +16,10 @@ import static gov.nasa.jpl.aerie.merlin.framework.ModelActions.delay;
  * 充電レートを通常より高める。
  * 観測対象に向けた姿勢制御と競合するためトレードオフが必要。
  *
- * <h3>リソースへの影響</h3>
+ * <h2>リソースへの影響</h2>
  * <ul>
- *   <li>{@code power/battery_energy_wh} — 追加発電分だけ充電が加速</li>
- *   <li>{@code power/total_draw_w}       — 充電強化で見掛け上の消費が減少</li>
- *   <li>{@code satellite/mode}           — CHARGING → NOMINAL に遷移</li>
+ *   <li>{@code power/solar_power_w}  — 追加発電分の加算（バッテリーへの充電が加速）</li>
+ *   <li>{@code satellite/mode}       — CHARGING → 開始時のモードに復帰</li>
  * </ul>
  */
 @ActivityType("SolarCharging")
@@ -36,16 +36,30 @@ public final class SolarCharging {
     @Parameter
     public double additionalPowerW = 50.0;
 
+    @Validation("充電強化維持時間は正の値でなければならない")
+    @Validation.Subject("duration")
+    public boolean validateDuration() {
+        return duration.longerThan(Duration.ZERO);
+    }
+
+    @Validation("追加発電量は負にできない")
+    @Validation.Subject("additionalPowerW")
+    public boolean validateAdditionalPower() {
+        return additionalPowerW >= 0.0;
+    }
+
+    @ActivityType.EffectModel
     public void run(final Mission mission) {
+        final SatelliteMode previousMode = mission.mode.currentMode();
         mission.mode.setMode(SatelliteMode.CHARGING);
 
-        // 追加発電: 消費電力の「削減」として表現（バッテリーに多く流れる）
-        mission.power.emitPowerDelta(-additionalPowerW);
+        // 最適姿勢に遷移して追加発電を得る
+        mission.power.increaseSolarPower(additionalPowerW);
 
         delay(duration);
 
         // 通常姿勢に戻す
-        mission.power.emitPowerDelta(+additionalPowerW);
-        mission.mode.setMode(SatelliteMode.NOMINAL);
+        mission.power.decreaseSolarPower(additionalPowerW);
+        mission.mode.setMode(previousMode);
     }
 }
